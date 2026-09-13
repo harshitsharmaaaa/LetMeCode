@@ -1,0 +1,220 @@
+[
+  {
+    "id": "schema.public",
+    "label": "Create schema \"public\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres"
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Create schema \"public\"",
+        "sql": "CREATE SCHEMA IF NOT EXISTS \"public\"",
+        "params": []
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "table.problem",
+    "label": "Create table \"problem\"",
+    "summary": "Creates table \"problem\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "problem"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"problem\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"problem\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"problem\"",
+        "sql": "CREATE TABLE \"public\".\"problem\" (\n  \"constraints\" text NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"description\" text NOT NULL,\n  \"difficulty\" text NOT NULL,\n  \"examples\" json NOT NULL,\n  \"id\" text NOT NULL,\n  \"slug\" text NOT NULL,\n  \"supportedLanguages\" text[] NOT NULL,\n  \"title\" text NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"problem_difficulty_check_244bf003\" CHECK (\"difficulty\" IN ('EASY', 'MEDIUM', 'HARD')),\n  CONSTRAINT \"problem_supportedLanguages_elem_not_null_da3c759a\" CHECK (array_position(\"supportedLanguages\", NULL) IS NULL)\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"problem\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"problem\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.testCase",
+    "label": "Create table \"testCase\"",
+    "summary": "Creates table \"testCase\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "testCase"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"testCase\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"testCase\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"testCase\"",
+        "sql": "CREATE TABLE \"public\".\"testCase\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"expectedOutput\" text NOT NULL,\n  \"id\" text NOT NULL,\n  \"input\" text NOT NULL,\n  \"isHidden\" bool DEFAULT false NOT NULL,\n  \"problemId\" text NOT NULL,\n  PRIMARY KEY (\"id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"testCase\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"testCase\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.problem.problem_slug_key",
+    "label": "Add unique constraint on \"problem\" (slug)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "problem_slug_key",
+        "table": "problem"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"problem_slug_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "problem_slug_key",
+          "public",
+          "\"public\".\"problem\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"problem_slug_key\"",
+        "sql": "ALTER TABLE \"public\".\"problem\" ADD CONSTRAINT \"problem_slug_key\" UNIQUE (\"slug\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"problem_slug_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "problem_slug_key",
+          "public",
+          "\"public\".\"problem\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.testCase.testCase_problemId_idx_0024556d",
+    "label": "Create index \"testCase_problemId_idx_0024556d\" on \"testCase\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "testCase_problemId_idx_0024556d",
+        "table": "testCase"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"testCase_problemId_idx_0024556d\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"testCase_problemId_idx_0024556d\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"testCase_problemId_idx_0024556d\"",
+        "sql": "CREATE INDEX \"testCase_problemId_idx_0024556d\" ON \"public\".\"testCase\" (\"problemId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"testCase_problemId_idx_0024556d\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"testCase_problemId_idx_0024556d\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.testCase.testCase_problemId_fkey",
+    "label": "Add foreign key \"testCase_problemId_fkey\" on \"testCase\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "testCase_problemId_fkey",
+        "table": "testCase"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"testCase_problemId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "testCase_problemId_fkey",
+          "public",
+          "\"public\".\"testCase\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"testCase_problemId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"testCase\"\nADD CONSTRAINT \"testCase_problemId_fkey\"\nFOREIGN KEY (\"problemId\")\nREFERENCES \"public\".\"problem\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"testCase_problemId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "testCase_problemId_fkey",
+          "public",
+          "\"public\".\"testCase\""
+        ]
+      }
+    ]
+  }
+]
