@@ -5,6 +5,18 @@ enum Difficulty {
   HARD
 }
 
+enum SubmissionStatus {
+  QUEUED
+  RUNNING
+  ACCEPTED
+  WRONG_ANSWER
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  RUNTIME_ERROR
+  COMPILE_ERROR
+  INTERNAL_ERROR
+}
+
 model Problem {
   id                 String                     @id @default(uuid())
   title              String
@@ -17,6 +29,7 @@ model Problem {
   createdAt          TimestamptzString          @default(now())
   updatedAt          temporal.updatedAtString()
   testCases          TestCase[]
+  submissions        Submission[]
 }
 
 model TestCase {
@@ -27,6 +40,19 @@ model TestCase {
   expectedOutput String
   isHidden       Boolean           @default(false)
   createdAt      TimestamptzString @default(now())
+
+  @@index([problemId])
+}
+
+model Submission {
+  id        String           @id @default(uuid())
+  problemId String
+  problem   Problem          @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  language  String
+  code      String
+  status    SubmissionStatus @default(QUEUED)
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
 
   @@index([problemId])
 }

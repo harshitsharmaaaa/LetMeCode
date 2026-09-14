@@ -8,6 +8,10 @@
       "model": "Problem",
       "namespace": "public"
     },
+    "submission": {
+      "model": "Submission",
+      "namespace": "public"
+    },
     "testCase": {
       "model": "TestCase",
       "namespace": "public"
@@ -31,6 +35,47 @@
               {
                 "name": "HARD",
                 "value": "HARD"
+              }
+            ]
+          },
+          "SubmissionStatus": {
+            "codecId": "pg/text@1",
+            "members": [
+              {
+                "name": "QUEUED",
+                "value": "QUEUED"
+              },
+              {
+                "name": "RUNNING",
+                "value": "RUNNING"
+              },
+              {
+                "name": "ACCEPTED",
+                "value": "ACCEPTED"
+              },
+              {
+                "name": "WRONG_ANSWER",
+                "value": "WRONG_ANSWER"
+              },
+              {
+                "name": "TIME_LIMIT_EXCEEDED",
+                "value": "TIME_LIMIT_EXCEEDED"
+              },
+              {
+                "name": "MEMORY_LIMIT_EXCEEDED",
+                "value": "MEMORY_LIMIT_EXCEEDED"
+              },
+              {
+                "name": "RUNTIME_ERROR",
+                "value": "RUNTIME_ERROR"
+              },
+              {
+                "name": "COMPILE_ERROR",
+                "value": "COMPILE_ERROR"
+              },
+              {
+                "name": "INTERNAL_ERROR",
+                "value": "INTERNAL_ERROR"
               }
             ]
           }
@@ -117,6 +162,21 @@
               }
             },
             "relations": {
+              "submissions": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "problemId"
+                  ]
+                },
+                "to": {
+                  "model": "Submission",
+                  "namespace": "public"
+                }
+              },
               "testCases": {
                 "cardinality": "1:N",
                 "on": {
@@ -168,6 +228,110 @@
               },
               "namespaceId": "public",
               "table": "problem"
+            }
+          },
+          "Submission": {
+            "fields": {
+              "code": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "language": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "problemId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "status": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "SubmissionStatus",
+                  "namespaceId": "public",
+                  "plane": "domain"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "problem": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "problemId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Problem",
+                  "namespace": "public"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "code": {
+                  "column": "code"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "language": {
+                  "column": "language"
+                },
+                "problemId": {
+                  "column": "problemId"
+                },
+                "status": {
+                  "column": "status"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "public",
+              "table": "submission"
             }
           },
           "TestCase": {
@@ -358,6 +522,101 @@
                 }
               ]
             },
+            "submission": {
+              "checks": [
+                {
+                  "expression": "\"status\" IN ('QUEUED', 'RUNNING', 'ACCEPTED', 'WRONG_ANSWER', 'TIME_LIMIT_EXCEEDED', 'MEMORY_LIMIT_EXCEEDED', 'RUNTIME_ERROR', 'COMPILE_ERROR', 'INTERNAL_ERROR')",
+                  "name": "submission_status_check_2873ad17",
+                  "prefix": "submission_status_check"
+                }
+              ],
+              "columns": {
+                "code": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "language": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "problemId": {
+                  "codecId": "pg/text@1",
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "status": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "QUEUED"
+                  },
+                  "nativeType": "text",
+                  "nullable": false,
+                  "valueSet": {
+                    "entityKind": "valueSet",
+                    "entityName": "SubmissionStatus",
+                    "namespaceId": "public",
+                    "plane": "storage"
+                  }
+                },
+                "updatedAt": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "problemId"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "submission"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "public",
+                    "tableName": "problem"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "problemId"
+                  ],
+                  "name": "submission_problemId_idx_0024556d",
+                  "prefix": "submission_problemId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "testCase": {
               "columns": {
                 "createdAt": {
@@ -444,6 +703,20 @@
                 "MEDIUM",
                 "HARD"
               ]
+            },
+            "SubmissionStatus": {
+              "kind": "valueSet",
+              "values": [
+                "QUEUED",
+                "RUNNING",
+                "ACCEPTED",
+                "WRONG_ANSWER",
+                "TIME_LIMIT_EXCEEDED",
+                "MEMORY_LIMIT_EXCEEDED",
+                "RUNTIME_ERROR",
+                "COMPILE_ERROR",
+                "INTERNAL_ERROR"
+              ]
             }
           }
         },
@@ -451,10 +724,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a9819f75a74bcb335ad4cfb5a2d1e44f1b6a2f34842b7b611080b10237325db7"
+    "storageHash": "b2a7de84a27ad4ba56749079d190861533e8566ce0696fbe846126e6200d2178"
   },
   "execution": {
-    "executionHash": "42d4561a9eb4b37d726fcfa61ed8a4da505e3119829cdb6c99196a3406c187f5",
+    "executionHash": "46a17a403cc1f323321fa20626063761fa9c969f29a5a7e8be2d335704d4529a",
     "mutations": {
       "defaults": [
         {
@@ -481,6 +754,32 @@
             "column": "updatedAt",
             "namespace": "public",
             "table": "problem"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "uuidv4",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "id",
+            "namespace": "public",
+            "table": "submission"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "updatedAt",
+            "namespace": "public",
+            "table": "submission"
           }
         },
         {

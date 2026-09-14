@@ -1,0 +1,122 @@
+[
+  {
+    "id": "table.submission",
+    "label": "Create table \"submission\"",
+    "summary": "Creates table \"submission\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "submission"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"submission\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"submission\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"submission\"",
+        "sql": "CREATE TABLE \"public\".\"submission\" (\n  \"code\" text NOT NULL,\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"id\" text NOT NULL,\n  \"language\" text NOT NULL,\n  \"problemId\" text NOT NULL,\n  \"status\" text DEFAULT 'QUEUED' NOT NULL,\n  \"updatedAt\" timestamptz NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"submission_status_check_2873ad17\" CHECK (\"status\" IN ('QUEUED', 'RUNNING', 'ACCEPTED', 'WRONG_ANSWER', 'TIME_LIMIT_EXCEEDED', 'MEMORY_LIMIT_EXCEEDED', 'RUNTIME_ERROR', 'COMPILE_ERROR', 'INTERNAL_ERROR'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"submission\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"submission\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.submission.submission_problemId_idx_0024556d",
+    "label": "Create index \"submission_problemId_idx_0024556d\" on \"submission\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "submission_problemId_idx_0024556d",
+        "table": "submission"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"submission_problemId_idx_0024556d\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"submission_problemId_idx_0024556d\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"submission_problemId_idx_0024556d\"",
+        "sql": "CREATE INDEX \"submission_problemId_idx_0024556d\" ON \"public\".\"submission\" (\"problemId\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"submission_problemId_idx_0024556d\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"submission_problemId_idx_0024556d\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.submission.submission_problemId_fkey",
+    "label": "Add foreign key \"submission_problemId_fkey\" on \"submission\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "submission_problemId_fkey",
+        "table": "submission"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"submission_problemId_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "submission_problemId_fkey",
+          "public",
+          "\"public\".\"submission\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"submission_problemId_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"submission\"\nADD CONSTRAINT \"submission_problemId_fkey\"\nFOREIGN KEY (\"problemId\")\nREFERENCES \"public\".\"problem\" (\"id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"submission_problemId_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "submission_problemId_fkey",
+          "public",
+          "\"public\".\"submission\""
+        ]
+      }
+    ]
+  }
+]
