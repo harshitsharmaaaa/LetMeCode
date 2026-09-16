@@ -1,4 +1,6 @@
 import { getDb } from "@/lib/prisma";
+import { executeWithBlackBox } from "@/lib/blackbox";
+import { generateHarnessSource } from "@/lib/judge/harness";
 
 // A single test execution the future executor will run.
 export type JudgeTestCase = {
@@ -38,6 +40,38 @@ export class JudgeError extends Error {
     this.status = status;
   }
 }
+
+// Final per-test / aggregate statuses for the synchronous judge run.
+// These mirror SubmissionStatus values so the future worker can persist
+// them directly. COMPILE_ERROR is intentionally unused: BlackBox reports
+// compilation failures as FAILED with exit code 1 and compiler text on
+// stderr (see TheBlackBox packages/sandbox/src/docker.ts), which is
+// indistinguishable from a runtime failure at the HTTP boundary.
+export type JudgeRunStatus =
+  | "ACCEPTED"
+  | "WRONG_ANSWER"
+  | "TIME_LIMIT_EXCEEDED"
+  | "MEMORY_LIMIT_EXCEEDED"
+  | "RUNTIME_ERROR";
+
+// Safe per-test result: no input, no expected output, no generated source,
+// no stdout/stderr. Safe to return even for hidden test cases.
+export type JudgeTestResult = {
+  testCaseId: string;
+  passed: boolean;
+  status: JudgeRunStatus;
+  executionTimeMs: number | null;
+};
+
+// Aggregated result of judging one submission across all its test cases.
+export type JudgeRunResult = {
+  submissionId: string;
+  status: JudgeRunStatus;
+  passedTests: number;
+  totalTests: number;
+  executionTimeMs: number;
+  testResults: JudgeTestResult[];
+};
 
 // Load a submission and prepare its execution plan.
 // Does NOT execute code and does NOT change submission status.
@@ -104,5 +138,113 @@ export async function prepareJudgePlan(
       input: t.input,
       expectedOutput: t.expectedOutput,
     })),
+  };
+}
+
+// Trim leading/trailing whitespace, then compare the exact remaining content.
+export function normalizeOutput(output: string | null): string {
+  return (output ?? "").trim();
+}
+
+export function compareOutput(
+  actual: string | null,
+  expected: string,
+): boolean {
+  return normalizeOutput(actual) === normalizeOutput(expected);
+}
+
+// Map a BlackBox final status to a judge failure status.
+// Returns null for COMPLETED, where the caller compares stdout instead.
+function mapBlackboxStatus(status: string): JudgeRunStatus | null {
+  switch (status) {
+    case "COMPLETED":
+      return null;
+    case "TIME_LIMIT_EXCEEDED":
+      return "TIME_LIMIT_EXCEEDED";
+    case "MEMORY_LIMIT_EXCEEDED":
+      return "MEMORY_LIMIT_EXCEEDED";
+    case "OUTPUT_LIMIT_EXCEEDED":
+    case "FAILED":
+    default:
+      return "RUNTIME_ERROR";
+  }
+}
+
+// Priority: TLE > MLE > runtime failure > wrong answer > accepted.
+function aggregateStatus(results: JudgeTestResult[]): JudgeRunStatus {
+  if (results.some((r) => r.status === "TIME_LIMIT_EXCEEDED")) {
+    return "TIME_LIMIT_EXCEEDED";
+  }
+  if (results.some((r) => r.status === "MEMORY_LIMIT_EXCEEDED")) {
+    return "MEMORY_LIMIT_EXCEEDED";
+  }
+  if (results.some((r) => r.status === "RUNTIME_ERROR")) {
+    return "RUNTIME_ERROR";
+  }
+  if (results.some((r) => r.status === "WRONG_ANSWER")) {
+    return "WRONG_ANSWER";
+  }
+  return "ACCEPTED";
+}
+
+// Judge one submission across ALL its test cases, sequentially.
+// Synchronous by design: no queues, no workers, no parallelism.
+// Returns the aggregated result WITHOUT persisting it and WITHOUT
+// changing Submission.status.
+export async function runJudge(
+  submissionId: string,
+): Promise<JudgeRunResult> {
+  const plan = await prepareJudgePlan(submissionId);
+
+  const testResults: JudgeTestResult[] = [];
+  let passedTests = 0;
+  let executionTimeMs = 0;
+
+  for (const testCase of plan.testCases) {
+    const { sourceCode } = generateHarnessSource({
+      language: plan.language,
+      code: plan.code,
+      problemSlug: plan.problemSlug,
+      testCaseInput: testCase.input,
+    });
+
+    const result = await executeWithBlackBox({
+      language: plan.language,
+      code: sourceCode,
+      stdin: testCase.input,
+    });
+
+    executionTimeMs += result.executionTimeMs ?? 0;
+
+    const failureStatus = mapBlackboxStatus(result.status);
+    let status: JudgeRunStatus;
+    let passed: boolean;
+    if (failureStatus !== null) {
+      status = failureStatus;
+      passed = false;
+    } else if (compareOutput(result.stdout, testCase.expectedOutput)) {
+      status = "ACCEPTED";
+      passed = true;
+      passedTests += 1;
+    } else {
+      status = "WRONG_ANSWER";
+      passed = false;
+    }
+
+    testResults.push({
+      testCaseId: testCase.id,
+      passed,
+      status,
+      executionTimeMs: result.executionTimeMs,
+    });
+  }
+
+  return {
+    submissionId: plan.submissionId,
+    status: aggregateStatus(testResults),
+    passedTests,
+    totalTests: testResults.length,
+    executionTimeMs,
+    testResults,
   };
 }
