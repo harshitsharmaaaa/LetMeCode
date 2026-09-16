@@ -1,0 +1,170 @@
+[
+  {
+    "id": "column.public.submission.executionTimeMs",
+    "label": "Add column \"executionTimeMs\" to \"submission\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "executionTimeMs",
+        "table": "submission"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"executionTimeMs\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "submission",
+          "executionTimeMs"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"executionTimeMs\"",
+        "sql": "ALTER TABLE \"public\".\"submission\" ADD COLUMN \"executionTimeMs\" int4 DEFAULT 0 NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"executionTimeMs\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "submission",
+          "executionTimeMs"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.submission.failedTestNumber",
+    "label": "Add column \"failedTestNumber\" to \"submission\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "failedTestNumber",
+        "table": "submission"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"failedTestNumber\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "submission",
+          "failedTestNumber"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"failedTestNumber\"",
+        "sql": "ALTER TABLE \"public\".\"submission\" ADD COLUMN \"failedTestNumber\" int4"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"failedTestNumber\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "submission",
+          "failedTestNumber"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.submission.passedTests",
+    "label": "Add column \"passedTests\" to \"submission\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "passedTests",
+        "table": "submission"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"passedTests\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "submission",
+          "passedTests"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"passedTests\"",
+        "sql": "ALTER TABLE \"public\".\"submission\" ADD COLUMN \"passedTests\" int4 DEFAULT 0 NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"passedTests\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "submission",
+          "passedTests"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.submission.totalTests",
+    "label": "Add column \"totalTests\" to \"submission\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "totalTests",
+        "table": "submission"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"totalTests\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "submission",
+          "totalTests"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"totalTests\"",
+        "sql": "ALTER TABLE \"public\".\"submission\" ADD COLUMN \"totalTests\" int4 DEFAULT 0 NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"totalTests\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "submission",
+          "totalTests"
+        ]
+      }
+    ]
+  }
+]

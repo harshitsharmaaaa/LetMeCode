@@ -51,6 +51,10 @@ model Submission {
   language  String
   code      String
   status    SubmissionStatus @default(QUEUED)
+  passedTests Int            @default(0)
+  totalTests Int             @default(0)
+  executionTimeMs Int        @default(0)
+  failedTestNumber Int?
   createdAt TimestamptzString @default(now())
   updatedAt temporal.updatedAtString()
 

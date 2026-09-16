@@ -7,11 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:seed": "bun prisma/seed.ts"
+    "db:seed": "bun prisma/seed.ts",
+    "worker": "bun worker.ts"
   },
   "dependencies": {
     "@prisma/orm-postgres": "^8.0.0-rc.11",
+    "bullmq": "^6.3.6",
     "dotenv": "^17.4.2",
+    "ioredis": "^6.0.0",
     "next": "16.3.5",
     "prisma": "^8.0.0-rc.14",
     "react": "19.2.8",

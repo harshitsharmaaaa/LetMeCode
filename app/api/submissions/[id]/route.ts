@@ -12,7 +12,18 @@ export async function GET(
   const submission = await db.orm.public.Submission.where((s) =>
     s.id.eq(id),
   )
-    .select("id", "problemId", "language", "status", "createdAt", "updatedAt")
+    .select(
+      "id",
+      "problemId",
+      "language",
+      "status",
+      "passedTests",
+      "totalTests",
+      "executionTimeMs",
+      "failedTestNumber",
+      "createdAt",
+      "updatedAt",
+    )
     .first();
 
   if (submission === null) {

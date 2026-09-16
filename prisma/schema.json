@@ -246,6 +246,20 @@
                   "kind": "scalar"
                 }
               },
+              "executionTimeMs": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "failedTestNumber": {
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -257,6 +271,13 @@
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "passedTests": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
                   "kind": "scalar"
                 }
               },
@@ -278,6 +299,13 @@
                   "entityName": "SubmissionStatus",
                   "namespaceId": "public",
                   "plane": "domain"
+                }
+              },
+              "totalTests": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
                 }
               },
               "updatedAt": {
@@ -314,17 +342,29 @@
                 "createdAt": {
                   "column": "createdAt"
                 },
+                "executionTimeMs": {
+                  "column": "executionTimeMs"
+                },
+                "failedTestNumber": {
+                  "column": "failedTestNumber"
+                },
                 "id": {
                   "column": "id"
                 },
                 "language": {
                   "column": "language"
                 },
+                "passedTests": {
+                  "column": "passedTests"
+                },
                 "problemId": {
                   "column": "problemId"
                 },
                 "status": {
                   "column": "status"
+                },
+                "totalTests": {
+                  "column": "totalTests"
                 },
                 "updatedAt": {
                   "column": "updatedAt"
@@ -545,6 +585,20 @@
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
+                "executionTimeMs": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": 0
+                  },
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "failedTestNumber": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": true
+                },
                 "id": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
@@ -553,6 +607,15 @@
                 "language": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
+                  "nullable": false
+                },
+                "passedTests": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": 0
+                  },
+                  "nativeType": "int4",
                   "nullable": false
                 },
                 "problemId": {
@@ -574,6 +637,15 @@
                     "namespaceId": "public",
                     "plane": "storage"
                   }
+                },
+                "totalTests": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": 0
+                  },
+                  "nativeType": "int4",
+                  "nullable": false
                 },
                 "updatedAt": {
                   "codecId": "pg/timestamptz-string@1",
@@ -724,7 +796,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b2a7de84a27ad4ba56749079d190861533e8566ce0696fbe846126e6200d2178"
+    "storageHash": "fa95b34359cd3368434de0d34a8ee991a6d4e7fe8485939b0798ecf6f8f69df0"
   },
   "execution": {
     "executionHash": "46a17a403cc1f323321fa20626063761fa9c969f29a5a7e8be2d335704d4529a",

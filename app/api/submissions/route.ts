@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/prisma";
+import { enqueueSubmission } from "@/lib/queue";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,30 @@ export async function POST(request: Request) {
     code,
     status: "QUEUED",
   });
+
+  // Hand off to the background judge worker. Never run the judge here:
+  // this endpoint must return immediately.
+  try {
+    await enqueueSubmission(submission.id);
+  } catch {
+    // Compensating delete: a QUEUED row without a queued job must not
+    // survive. No transaction spans PostgreSQL and Redis.
+    try {
+      await db.orm.public.Submission.where((s) =>
+        s.id.eq(submission.id),
+      ).delete();
+    } catch (deleteErr) {
+      console.error(
+        `Failed to delete orphaned submission ${submission.id}:`,
+        deleteErr,
+      );
+      return Response.json(
+        { error: "Internal server error" },
+        { status: 500 },
+      );
+    }
+    return Response.json({ error: "Queue unavailable" }, { status: 503 });
+  }
 
   return Response.json(
     { id: submission.id, status: submission.status },
