@@ -12,6 +12,7 @@ export type JudgeTestCase = {
 export type JudgePlan = {
   submissionId: string;
   problemId: string;
+  problemSlug: string;
   language: string;
   code: string;
   testCases: JudgeTestCase[];
@@ -58,7 +59,7 @@ export async function prepareJudgePlan(
   const problem = await db.orm.public.Problem.where((p) =>
     p.id.eq(submission.problemId),
   )
-    .select("id", "supportedLanguages")
+    .select("id", "slug", "supportedLanguages")
     .first();
 
   if (problem === null) {
@@ -95,6 +96,7 @@ export async function prepareJudgePlan(
   return {
     submissionId: submission.id,
     problemId: problem.id,
+    problemSlug: problem.slug,
     language: submission.language,
     code: submission.code,
     testCases: ordered.map((t) => ({
