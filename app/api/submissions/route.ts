@@ -1,44 +1,55 @@
 import { getDb } from "@/lib/prisma";
 import { enqueueSubmission } from "@/lib/queue";
+import {
+  MAX_CODE_BYTES,
+  clientKey,
+  isRateLimited,
+} from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
 const SUPPORTED_LANGUAGES = ["cpp", "python", "java", "javascript"] as const;
+const SUBMISSION_FIELDS = [
+  "id",
+  "problemId",
+  "language",
+  "status",
+  "passedTests",
+  "totalTests",
+  "executionTimeMs",
+  "failedTestNumber",
+  "createdAt",
+  "updatedAt",
+] as const;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const problemId = searchParams.get("problemId");
 
-  if (!problemId) {
-    return Response.json(
-      { error: "problemId query parameter is required" },
-      { status: 400 },
-    );
-  }
-
   const db = getDb();
-  const submissions = await db.orm.public.Submission.where((s) =>
-    s.problemId.eq(problemId),
-  )
-    .select(
-      "id",
-      "problemId",
-      "language",
-      "status",
-      "passedTests",
-      "totalTests",
-      "executionTimeMs",
-      "failedTestNumber",
-      "createdAt",
-      "updatedAt",
-    )
+  // problemId is optional: the history page lists recent submissions across
+  // all problems. Never selects the `code` column.
+  const base = problemId
+    ? db.orm.public.Submission.where((s) => s.problemId.eq(problemId))
+    : db.orm.public.Submission;
+  const submissions = await base
+    .select(...SUBMISSION_FIELDS)
     .orderBy((s) => s.createdAt.desc())
+    .limit(50)
     .all();
 
   return Response.json(submissions);
 }
 
 export async function POST(request: Request) {
+  // Simple abuse guard: 20 submissions / minute per client (process-local).
+  if (isRateLimited(`submit:${clientKey(request)}`, 20, 60_000)) {
+    return Response.json(
+      { error: "Too many submissions. Please wait a minute and try again." },
+      { status: 429 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -65,7 +76,10 @@ export async function POST(request: Request) {
       language as (typeof SUPPORTED_LANGUAGES)[number],
     )
   ) {
-    return Response.json({ error: "Unsupported language" }, { status: 400 });
+    return Response.json(
+      { error: `Unsupported language "${language}"` },
+      { status: 400 },
+    );
   }
 
   if (typeof code !== "string" || code.trim() === "") {
@@ -75,16 +89,30 @@ export async function POST(request: Request) {
     );
   }
 
+  if (Buffer.byteLength(code, "utf8") > MAX_CODE_BYTES) {
+    return Response.json(
+      { error: "code is too large (max 64 KB)" },
+      { status: 400 },
+    );
+  }
+
   const db = getDb();
 
   const problem = await db.orm.public.Problem.where((p) =>
     p.id.eq(problemId),
   )
-    .select("id")
+    .select("id", "supportedLanguages")
     .first();
 
   if (problem === null) {
     return Response.json({ error: "Problem not found" }, { status: 404 });
+  }
+
+  if (!problem.supportedLanguages.includes(language)) {
+    return Response.json(
+      { error: `Language "${language}" is not supported for this problem` },
+      { status: 400 },
+    );
   }
 
   const submission = await db.orm.public.Submission.create({

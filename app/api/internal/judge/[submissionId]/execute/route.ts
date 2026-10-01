@@ -1,5 +1,7 @@
 import { executeWithBlackBox } from "@/lib/blackbox";
+import { generateHarnessSource } from "@/lib/judge/harness";
 import { JudgeError, prepareJudgePlan } from "@/lib/judge/judge";
+import { isDevEnvironment } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,9 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ submissionId: string }> },
 ) {
+  if (!isDevEnvironment()) {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
   const { submissionId } = await params;
 
   try {
@@ -23,9 +28,16 @@ export async function POST(
       );
     }
 
-    const result = await executeWithBlackBox({
+    const { sourceCode } = generateHarnessSource({
       language: plan.language,
       code: plan.code,
+      problemSlug: plan.problemSlug,
+      testCaseInput: first.input,
+    });
+
+    const result = await executeWithBlackBox({
+      language: plan.language,
+      code: sourceCode,
       stdin: first.input,
     });
 

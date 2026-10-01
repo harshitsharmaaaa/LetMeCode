@@ -42,17 +42,18 @@ export class JudgeError extends Error {
 }
 
 // Final per-test / aggregate statuses for the synchronous judge run.
-// These mirror SubmissionStatus values so the future worker can persist
-// them directly. COMPILE_ERROR is intentionally unused: BlackBox reports
-// compilation failures as FAILED with exit code 1 and compiler text on
-// stderr (see TheBlackBox packages/sandbox/src/docker.ts), which is
-// indistinguishable from a runtime failure at the HTTP boundary.
+// These mirror SubmissionStatus values so the worker can persist them
+// directly. BlackBox reports compilation failures as FAILED with exit code
+// 1 and compiler text on stderr (see TheBlackBox packages/sandbox/src/
+// docker.ts), so COMPILE_ERROR is assigned by the stderr heuristic in
+// mapBlackboxStatus — conservative patterns only, fallback is RUNTIME_ERROR.
 export type JudgeRunStatus =
   | "ACCEPTED"
   | "WRONG_ANSWER"
   | "TIME_LIMIT_EXCEEDED"
   | "MEMORY_LIMIT_EXCEEDED"
-  | "RUNTIME_ERROR";
+  | "RUNTIME_ERROR"
+  | "COMPILE_ERROR";
 
 // Safe per-test result: no input, no expected output, no generated source,
 // no stdout/stderr. Safe to return even for hidden test cases.
@@ -153,9 +154,34 @@ export function compareOutput(
   return normalizeOutput(actual) === normalizeOutput(expected);
 }
 
+// Conservative compiler-output patterns: only matched against FAILED
+// executions, so a false negative degrades to RUNTIME_ERROR (safe).
+const COMPILE_ERROR_PATTERNS = [
+  /syntaxerror/i,
+  /indentationerror/i,
+  /taberror/i,
+  /cannot find symbol/i,
+  /undefined reference/i,
+  /fatal error/i,
+  /compilation (failed|error)/i,
+  /javac/i,
+  /g\+\+|gcc|clang/i,
+  /\.cpp:\d+/,
+  /\.java:\d+/,
+  /error:\s/i,
+];
+
+export function looksLikeCompileError(stderr: string | null): boolean {
+  if (!stderr) return false;
+  return COMPILE_ERROR_PATTERNS.some((re) => re.test(stderr));
+}
+
 // Map a BlackBox final status to a judge failure status.
 // Returns null for COMPLETED, where the caller compares stdout instead.
-function mapBlackboxStatus(status: string): JudgeRunStatus | null {
+function mapBlackboxStatus(
+  status: string,
+  stderr: string | null,
+): JudgeRunStatus | null {
   switch (status) {
     case "COMPLETED":
       return null;
@@ -165,18 +191,22 @@ function mapBlackboxStatus(status: string): JudgeRunStatus | null {
       return "MEMORY_LIMIT_EXCEEDED";
     case "OUTPUT_LIMIT_EXCEEDED":
     case "FAILED":
+      return looksLikeCompileError(stderr) ? "COMPILE_ERROR" : "RUNTIME_ERROR";
     default:
       return "RUNTIME_ERROR";
   }
 }
 
-// Priority: TLE > MLE > runtime failure > wrong answer > accepted.
+// Priority: TLE > MLE > compile failure > runtime failure > wrong answer > accepted.
 function aggregateStatus(results: JudgeTestResult[]): JudgeRunStatus {
   if (results.some((r) => r.status === "TIME_LIMIT_EXCEEDED")) {
     return "TIME_LIMIT_EXCEEDED";
   }
   if (results.some((r) => r.status === "MEMORY_LIMIT_EXCEEDED")) {
     return "MEMORY_LIMIT_EXCEEDED";
+  }
+  if (results.some((r) => r.status === "COMPILE_ERROR")) {
+    return "COMPILE_ERROR";
   }
   if (results.some((r) => r.status === "RUNTIME_ERROR")) {
     return "RUNTIME_ERROR";
@@ -216,7 +246,7 @@ export async function runJudge(
 
     executionTimeMs += result.executionTimeMs ?? 0;
 
-    const failureStatus = mapBlackboxStatus(result.status);
+    const failureStatus = mapBlackboxStatus(result.status, result.stderr);
     let status: JudgeRunStatus;
     let passed: boolean;
     if (failureStatus !== null) {

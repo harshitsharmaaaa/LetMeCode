@@ -1,4 +1,5 @@
 import { JudgeError, prepareJudgePlan } from "@/lib/judge/judge";
+import { isDevEnvironment } from "@/lib/ratelimit";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,9 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ submissionId: string }> },
 ) {
+  if (!isDevEnvironment()) {
+    return Response.json({ error: "Not found" }, { status: 404 });
+  }
   const { submissionId } = await params;
 
   try {
