@@ -9,6 +9,7 @@ export async function GET() {
     "title",
     "slug",
     "difficulty",
+    "supportedLanguages",
   )
     .orderBy((p) => p.title.asc())
     .all();
