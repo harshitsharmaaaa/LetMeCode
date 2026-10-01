@@ -1,8 +1,12 @@
 @import "tailwindcss";
 
+// Light-only coding-platform theme: a single coherent palette.
+// (Dark-mode auto-inversion removed — it made hardcoded white cards and
+// gray panels unreadable. Revisit only with a full dark token set.)
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f1f5f9;
+  --foreground: #0f172a;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -10,13 +14,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
+import { getStarterCode } from "@/lib/starter";
 
 type TestCase = {
   id: string;
@@ -34,62 +36,14 @@ type SubmissionResult = {
   updatedAt: string;
 };
 
-const LANGUAGES = ["cpp", "python", "java", "javascript"] as const;
-
-const DEFAULT_CODE: Record<string, string> = {
-  cpp: `#include <vector>
-using namespace std;
-
-class Solution {
-public:
-    vector<int> twoSum(vector<int>& nums, int target) {
-        // Write your solution here
-        return {};
-    }
-};`,
-  python: `class Solution:
-    def twoSum(self, nums: list[int], target: int) -> list[int]:
-        # Write your solution here
-        return []`,
-  java: `class Solution {
-    public int[] twoSum(int[] nums, int target) {
-        // Write your solution here
-        return new int[]{};
-    }
-}`,
-  javascript: `/**
- * @param {number[]} nums
- * @param {number} target
- * @return {number[]}
- */
-var twoSum = function(nums, target) {
-    // Write your solution here
-    return [];
-};`,
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  QUEUED: "bg-gray-100 text-gray-700",
-  RUNNING: "bg-blue-100 text-blue-700",
-  ACCEPTED: "bg-green-100 text-green-800",
-  WRONG_ANSWER: "bg-red-100 text-red-800",
-  TIME_LIMIT_EXCEEDED: "bg-orange-100 text-orange-800",
-  MEMORY_LIMIT_EXCEEDED: "bg-purple-100 text-purple-800",
-  RUNTIME_ERROR: "bg-red-100 text-red-800",
-  COMPILE_ERROR: "bg-yellow-100 text-yellow-800",
-  INTERNAL_ERROR: "bg-gray-100 text-gray-600",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  QUEUED: "Queued",
-  RUNNING: "Running",
-  ACCEPTED: "Accepted",
-  WRONG_ANSWER: "Wrong Answer",
-  TIME_LIMIT_EXCEEDED: "Time Limit Exceeded",
-  MEMORY_LIMIT_EXCEEDED: "Memory Limit Exceeded",
-  RUNTIME_ERROR: "Runtime Error",
-  COMPILE_ERROR: "Compile Error",
-  INTERNAL_ERROR: "Internal Error",
+type RunResult = {
+  testCaseId: string;
+  status: string;
+  stdout: string | null;
+  stderr: string | null;
+  executionTimeMs: number | null;
+  expectedOutput: string;
+  passed: boolean;
 };
 
 const FINAL_STATUSES = new Set([
@@ -102,268 +56,541 @@ const FINAL_STATUSES = new Set([
   "INTERNAL_ERROR",
 ]);
 
-const difficultyColor: Record<string, string> = {
-  EASY: "bg-green-100 text-green-800",
-  MEDIUM: "bg-yellow-100 text-yellow-800",
-  HARD: "bg-red-100 text-red-800",
+const DIFFICULTY_STYLES: Record<string, string> = {
+  EASY: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  MEDIUM: "bg-amber-100 text-amber-800 border-amber-200",
+  HARD: "bg-red-100 text-red-800 border-red-200",
 };
+
+const STATUS_STYLES: Record<string, string> = {
+  QUEUED: "bg-slate-200 text-slate-700 border-slate-300",
+  RUNNING: "bg-blue-100 text-blue-800 border-blue-200",
+  ACCEPTED: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  WRONG_ANSWER: "bg-red-100 text-red-800 border-red-200",
+  TIME_LIMIT_EXCEEDED: "bg-orange-100 text-orange-800 border-orange-200",
+  MEMORY_LIMIT_EXCEEDED: "bg-purple-100 text-purple-800 border-purple-200",
+  RUNTIME_ERROR: "bg-red-100 text-red-800 border-red-200",
+  COMPILE_ERROR: "bg-amber-100 text-amber-800 border-amber-200",
+  INTERNAL_ERROR: "bg-slate-200 text-slate-600 border-slate-300",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  QUEUED: "Queued",
+  RUNNING: "Running",
+  ACCEPTED: "Accepted",
+  WRONG_ANSWER: "Wrong Answer",
+  TIME_LIMIT_EXCEEDED: "Time Limit Exceeded",
+  MEMORY_LIMIT_EXCEEDED: "Memory Limit Exceeded",
+  RUNTIME_ERROR: "Runtime Error",
+  COMPILE_ERROR: "Compile Error",
+  INTERNAL_ERROR: "Internal Error",
+  COMPLETED: "Completed",
+  FAILED: "Error",
+  OUTPUT_LIMIT_EXCEEDED: "Output Limit Exceeded",
+};
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status;
+}
+
+function statusStyle(status: string): string {
+  return (
+    STATUS_STYLES[status] ?? "bg-slate-200 text-slate-700 border-slate-300"
+  );
+}
+
+function friendlyError(status: number, fallback: string): string {
+  if (status === 404) return "Not found. It may have been removed.";
+  if (status === 429)
+    return "Too many requests. Please wait a minute and try again.";
+  if (status === 503)
+    return "The judge is temporarily unavailable. Please try again shortly.";
+  return fallback;
+}
 
 export default function ProblemDetailPage() {
   const params = useParams();
   const slug = params.slug as string;
 
   const [problem, setProblem] = useState<ProblemDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [language, setLanguage] = useState<string>("cpp");
-  const [code, setCode] = useState<string>(DEFAULT_CODE["cpp"]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [language, setLanguage] = useState<string>("python");
+  // Per-language edits: switching languages never discards typed code.
+  // Untouched languages fall back to their starter template.
+  const [edits, setEdits] = useState<Record<string, string>>({});
+  const [selectedTestId, setSelectedTestId] = useState<string | null>(null);
+
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<RunResult | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+
   const [submission, setSubmission] = useState<SubmissionResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [history, setHistory] = useState<SubmissionResult[]>([]);
 
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollAbort = useRef(false);
+
+  const code = problem
+    ? (edits[language] ?? getStarterCode(problem.slug, language))
+    : "";
+  const selectedTest =
+    problem?.testCases.find((t) => t.id === selectedTestId) ??
+    problem?.testCases[0] ??
+    null;
+  const busy = running || submitting || polling;
+
+  // Load the problem once per slug. Hidden test cases are never included:
+  // the API only returns public ones.
   useEffect(() => {
+    let cancelled = false;
+    setProblem(null);
+    setLoadError(null);
+    setRunResult(null);
+    setSubmission(null);
+    setHistory([]);
+
     fetch(`/api/problems/${slug}`)
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to load problem");
+        if (!res.ok) throw new Error(friendlyError(res.status, "Could not load problem."));
         return res.json();
       })
       .then((data: ProblemDetail) => {
+        if (cancelled) return;
         setProblem(data);
-        if (data.supportedLanguages.includes(language)) {
-          setCode(DEFAULT_CODE[language] || "");
+        setEdits({});
+        if (data.supportedLanguages.length > 0) {
+          setLanguage((current) =>
+            data.supportedLanguages.includes(current)
+              ? current
+              : data.supportedLanguages[0]!,
+          );
         }
+        setSelectedTestId(data.testCases[0]?.id ?? null);
       })
-      .catch(() => setError("Could not load problem."));
-  }, [slug, language]);
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : "Could not load problem.");
+        }
+      });
 
-  const pollSubmission = useCallback(
-    async (submissionId: string) => {
-      setPolling(true);
-      const poll = async () => {
-        try {
-          const res = await fetch(`/api/submissions/${submissionId}`);
-          if (!res.ok) return;
-          const data: SubmissionResult = await res.json();
-          setSubmission(data);
-          if (FINAL_STATUSES.has(data.status)) {
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  // Stop polling on unmount.
+  useEffect(() => {
+    pollAbort.current = false;
+    return () => {
+      pollAbort.current = true;
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+    };
+  }, []);
+
+  const pollSubmission = useCallback(async (submissionId: string) => {
+    setPolling(true);
+    const poll = async () => {
+      if (pollAbort.current) return;
+      try {
+        const res = await fetch(`/api/submissions/${submissionId}`);
+        if (!res.ok) {
+          if (!pollAbort.current) {
+            setSubmitError(friendlyError(res.status, "Could not fetch submission result."));
             setPolling(false);
-            return;
           }
-          setTimeout(poll, 2000);
-        } catch {
+          return;
+        }
+        const data: SubmissionResult = await res.json();
+        if (pollAbort.current) return;
+        setSubmission(data);
+        if (FINAL_STATUSES.has(data.status)) {
+          setPolling(false);
+          // Refresh per-problem history once judged.
+          fetch(`/api/submissions?problemId=${data.problemId}`)
+            .then((r) => (r.ok ? r.json() : []))
+            .then((list: SubmissionResult[]) => {
+              if (!pollAbort.current) setHistory(list.slice(0, 5));
+            })
+            .catch(() => {});
+          return;
+        }
+        pollTimer.current = setTimeout(poll, 2000);
+      } catch {
+        if (!pollAbort.current) {
+          setSubmitError("Lost connection while waiting for the result.");
           setPolling(false);
         }
-      };
-      poll();
-    },
-    [],
-  );
+      }
+    };
+    poll();
+  }, []);
 
-  const handleSubmit = async () => {
-    if (!problem || submitting) return;
-    setSubmitting(true);
-    setSubmission(null);
+  // Load recent submissions for this problem (for context, not required).
+  useEffect(() => {
+    if (!problem) return;
+    let cancelled = false;
+    fetch(`/api/submissions?problemId=${problem.id}`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: SubmissionResult[]) => {
+        if (!cancelled) setHistory(list.slice(0, 5));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [problem]);
 
+  const handleRun = async () => {
+    if (!problem || !selectedTest || busy) return;
+    setRunning(true);
+    setRunError(null);
+    setRunResult(null);
     try {
-      const res = await fetch("/api/submissions", {
+      const res = await fetch("/api/runtime", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           problemId: problem.id,
           language,
           code,
+          testCaseId: selectedTest.id,
         }),
       });
-
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Submission failed");
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : friendlyError(res.status, "Run failed."),
+        );
       }
-
-      const data = await res.json();
-      setSubmission(data);
-      pollSubmission(data.id);
+      setRunResult(data as RunResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Submission failed");
+      setRunError(err instanceof Error ? err.message : "Run failed.");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!problem || busy) return;
+    if (pollTimer.current) clearTimeout(pollTimer.current);
+    pollAbort.current = false;
+    setSubmitting(true);
+    setSubmitError(null);
+    setSubmission(null);
+    try {
+      const res = await fetch("/api/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ problemId: problem.id, language, code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : friendlyError(res.status, "Submission failed."),
+        );
+      }
+      setSubmission({ ...data, passedTests: 0, totalTests: 0, executionTimeMs: 0, failedTestNumber: null, problemId: problem.id, language });
+      await pollSubmission(data.id);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Submission failed.");
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleLanguageChange = (newLang: string) => {
-    setLanguage(newLang);
-    setCode(DEFAULT_CODE[newLang] || "");
+  const handleEditorKeyDown = (
+    e: React.KeyboardEvent<HTMLTextAreaElement>,
+  ) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      if (e.shiftKey) void handleSubmit();
+      else void handleRun();
+      return;
+    }
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const next =
+        code.slice(0, start) + "  " + code.slice(end);
+      setEdits((prev) => ({ ...prev, [language]: next }));
+      requestAnimationFrame(() => {
+        target.selectionStart = target.selectionEnd = start + 2;
+      });
+    }
   };
 
-  if (error !== null && problem === null) {
+  if (loadError !== null && problem === null) {
     return (
       <main className="max-w-4xl mx-auto p-6">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
+        <div className="bg-white border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {loadError}
         </div>
+        <Link href="/problems" className="text-blue-700 hover:underline text-sm mt-4 inline-block">
+          ← Back to problems
+        </Link>
       </main>
     );
   }
 
   if (problem === null) {
     return (
-      <main className="max-w-4xl mx-auto p-6">
-        <p className="text-gray-500">Loading problem...</p>
+      <main className="max-w-7xl mx-auto p-6">
+        <p className="text-slate-500">Loading problem…</p>
       </main>
     );
   }
 
   return (
-    <main className="max-w-6xl mx-auto p-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div>
-            <h1 className="text-2xl font-bold">{problem.title}</h1>
-            <span
-              className={`inline-block mt-2 px-2 py-1 rounded text-xs font-medium ${difficultyColor[problem.difficulty]}`}
-            >
-              {problem.difficulty}
-            </span>
-          </div>
+    <main className="max-w-7xl mx-auto p-4 sm:p-6">
+      <Link href="/problems" className="text-sm text-slate-500 hover:text-slate-800 mb-4 inline-block">
+        ← All problems
+      </Link>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        {/* LEFT: problem content */}
+        <div className="space-y-4 min-w-0">
+          <section className="bg-white border border-slate-200 rounded-xl p-5">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold text-slate-900">{problem.title}</h1>
+              <span
+                className={`inline-block px-2 py-1 rounded-md text-xs font-semibold border ${DIFFICULTY_STYLES[problem.difficulty] ?? "bg-slate-100 text-slate-700 border-slate-200"}`}
+              >
+                {problem.difficulty}
+              </span>
+            </div>
+            <p className="mt-3 text-slate-700 leading-relaxed whitespace-pre-wrap">
+              {problem.description}
+            </p>
+          </section>
 
-          <div className="prose max-w-none">
-            <p className="whitespace-pre-wrap">{problem.description}</p>
-          </div>
-
-          <div>
-            <h2 className="text-lg font-semibold mb-2">Examples</h2>
+          <section className="bg-white border border-slate-200 rounded-xl p-5">
+            <h2 className="text-base font-semibold text-slate-900 mb-3">Examples</h2>
             <div className="space-y-3">
               {problem.examples.map((ex, i) => (
-                <div key={i} className="bg-gray-50 border rounded p-3">
-                  <p>
-                    <strong>Input:</strong> {ex.input}
+                <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
+                  <p className="text-slate-700">
+                    <span className="font-semibold text-slate-900">Input: </span>
+                    <code className="font-mono text-slate-800">{ex.input}</code>
                   </p>
-                  <p>
-                    <strong>Output:</strong> {ex.output}
+                  <p className="mt-1 text-slate-700">
+                    <span className="font-semibold text-slate-900">Output: </span>
+                    <code className="font-mono text-slate-800">{ex.output}</code>
                   </p>
                   {ex.explanation && (
-                    <p className="text-gray-600">
-                      <strong>Explanation:</strong> {ex.explanation}
-                    </p>
+                    <p className="mt-1 text-slate-500">{ex.explanation}</p>
                   )}
                 </div>
               ))}
             </div>
-          </div>
+          </section>
 
-          <div>
-            <h2 className="text-lg font-semibold mb-2">Constraints</h2>
-            <pre className="bg-gray-50 border rounded p-3 text-sm whitespace-pre-wrap">
+          <section className="bg-white border border-slate-200 rounded-xl p-5">
+            <h2 className="text-base font-semibold text-slate-900 mb-2">Constraints</h2>
+            <pre className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm text-slate-700 whitespace-pre-wrap font-mono">
               {problem.constraints}
             </pre>
-          </div>
+          </section>
 
-          {problem.testCases.length > 0 && (
-            <div>
-              <h2 className="text-lg font-semibold mb-2">Test Cases</h2>
+          <section className="bg-white border border-slate-200 rounded-xl p-5">
+            <h2 className="text-base font-semibold text-slate-900 mb-1">Public test cases</h2>
+            <p className="text-sm text-slate-500 mb-3">
+              Select a test case, then press <span className="font-semibold">Run Code</span> to try it. Hidden tests only run on submit.
+            </p>
+            {problem.testCases.length === 0 ? (
+              <p className="text-sm text-slate-500">No public test cases for this problem.</p>
+            ) : (
               <div className="space-y-2">
-                {problem.testCases.map((tc, i) => (
-                  <div key={tc.id} className="bg-gray-50 border rounded p-3">
-                    <p>
-                      <strong>Input:</strong>
-                    </p>
-                    <pre className="text-sm mt-1">{tc.input}</pre>
-                    <p className="mt-2">
-                      <strong>Expected Output:</strong>
-                    </p>
-                    <pre className="text-sm mt-1">{tc.expectedOutput}</pre>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">Language:</label>
-            <select
-              value={language}
-              onChange={(e) => handleLanguageChange(e.target.value)}
-              className="border rounded px-3 py-1.5 text-sm"
-            >
-              {LANGUAGES.map((lang) => (
-                <option key={lang} value={lang}>
-                  {lang}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <textarea
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              className="w-full h-80 border rounded p-3 font-mono text-sm resize-y"
-              spellCheck={false}
-              placeholder="Write your solution here..."
-            />
-          </div>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleSubmit}
-              disabled={submitting || polling}
-              className="bg-blue-600 text-white px-4 py-2 rounded font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? "Submitting..." : polling ? "Judging..." : "Submit"}
-            </button>
-            {(submitting || polling) && (
-              <span className="text-sm text-gray-500">Processing...</span>
-            )}
-          </div>
-
-          {error !== null && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
-            </div>
-          )}
-
-          {submission !== null && (
-            <div className="border rounded p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">Result</h3>
-                <span
-                  className={`px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[submission.status] || "bg-gray-100 text-gray-700"}`}
-                >
-                  {STATUS_LABELS[submission.status] || submission.status}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-gray-500">Tests Passed:</span>{" "}
-                  <span className="font-medium">
-                    {submission.passedTests}/{submission.totalTests}
-                  </span>
+                <div className="flex gap-2 flex-wrap">
+                  {problem.testCases.map((tc, i) => (
+                    <button
+                      key={tc.id}
+                      onClick={() => setSelectedTestId(tc.id)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
+                        selectedTest?.id === tc.id
+                          ? "bg-slate-900 text-white border-slate-900"
+                          : "bg-white text-slate-700 border-slate-300 hover:border-slate-400"
+                      }`}
+                    >
+                      Case {i + 1}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <span className="text-gray-500">Runtime:</span>{" "}
-                  <span className="font-medium">
-                    {submission.executionTimeMs}ms
-                  </span>
-                </div>
-                {submission.failedTestNumber !== null && (
-                  <div className="col-span-2">
-                    <span className="text-gray-500">Failed Test:</span>{" "}
-                    <span className="font-medium">
-                      #{submission.failedTestNumber}
-                    </span>
+                {selectedTest && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
+                    <p className="font-semibold text-slate-900">Input</p>
+                    <pre className="mt-1 font-mono text-slate-800 whitespace-pre-wrap">{selectedTest.input}</pre>
+                    <p className="mt-3 font-semibold text-slate-900">Expected output</p>
+                    <pre className="mt-1 font-mono text-slate-800 whitespace-pre-wrap">{selectedTest.expectedOutput}</pre>
                   </div>
                 )}
               </div>
+            )}
+          </section>
+        </div>
 
-              {polling && (
-                <div className="flex items-center gap-2 text-sm text-blue-600">
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full" />
-                  Waiting for result...
-                </div>
+        {/* RIGHT: editor + run/submit */}
+        <div className="space-y-4 min-w-0 lg:sticky lg:top-4">
+          <section className="bg-white border border-slate-200 rounded-xl p-5">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <label className="text-sm font-semibold text-slate-900">
+                Language
+              </label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                disabled={busy}
+                className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white text-slate-800 disabled:opacity-50"
+              >
+                {problem.supportedLanguages.map((lang) => (
+                  <option key={lang} value={lang}>
+                    {lang}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <textarea
+              value={code}
+              onChange={(e) => setEdits((prev) => ({ ...prev, [language]: e.target.value }))}
+              onKeyDown={handleEditorKeyDown}
+              disabled={busy}
+              spellCheck={false}
+              rows={18}
+              placeholder="Write your solution here…"
+              className="mt-3 w-full border border-slate-300 rounded-lg p-3 font-mono text-[13px] leading-relaxed bg-slate-950 text-slate-100 resize-y min-h-72 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="mt-2 text-xs text-slate-500">
+              Tip: <kbd className="font-mono bg-slate-100 border border-slate-200 rounded px-1">Ctrl/⌘ + Enter</kbd> runs the selected test case.
+            </p>
+
+            <div className="mt-3 flex items-center gap-3 flex-wrap">
+              <button
+                onClick={handleRun}
+                disabled={busy || !selectedTest}
+                className="px-4 py-2 rounded-lg font-semibold text-sm bg-white text-slate-800 border border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {running ? "Running…" : "Run Code"}
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={busy}
+                className="px-4 py-2 rounded-lg font-semibold text-sm bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                {submitting ? "Submitting…" : polling ? "Judging…" : "Submit"}
+              </button>
+              {busy && (
+                <span className="text-sm text-slate-500">Working…</span>
               )}
             </div>
+          </section>
+
+          {runError && (
+            <div className="bg-white border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+              {runError}
+            </div>
+          )}
+
+          {runResult && (
+            <section className="bg-white border border-slate-200 rounded-xl p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-semibold text-slate-900">Run result</h3>
+                <span className={`px-2 py-1 rounded-md text-xs font-semibold border ${runResult.passed ? "bg-emerald-100 text-emerald-800 border-emerald-200" : "bg-red-100 text-red-800 border-red-200"}`}>
+                  {runResult.passed ? "Passed" : "Failed"}
+                </span>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-slate-500">Status</dt>
+                  <dd className="font-medium text-slate-800">{statusLabel(runResult.status)}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">Runtime</dt>
+                  <dd className="font-medium text-slate-800">{runResult.executionTimeMs ?? 0}ms</dd>
+                </div>
+              </dl>
+              <div className="mt-3 text-sm space-y-2">
+                <div>
+                  <p className="font-semibold text-slate-900">Your output</p>
+                  <pre className="mt-1 bg-slate-950 text-slate-100 font-mono rounded-lg p-3 whitespace-pre-wrap">{runResult.stdout ?? "(no output)"}</pre>
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-900">Expected output</p>
+                  <pre className="mt-1 bg-slate-50 border border-slate-200 font-mono rounded-lg p-3 whitespace-pre-wrap text-slate-800">{runResult.expectedOutput}</pre>
+                </div>
+                {runResult.stderr && (
+                  <div>
+                    <p className="font-semibold text-slate-900">Errors</p>
+                    <pre className="mt-1 bg-red-50 border border-red-200 text-red-800 font-mono rounded-lg p-3 whitespace-pre-wrap text-xs">{runResult.stderr.slice(0, 2000)}</pre>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {submitError && (
+            <div className="bg-white border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm">
+              {submitError}
+            </div>
+          )}
+
+          {submission && (
+            <section className="bg-white border border-slate-200 rounded-xl p-5">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-semibold text-slate-900">Submission result</h3>
+                <span className={`px-2 py-1 rounded-md text-xs font-semibold border ${statusStyle(submission.status)}`}>
+                  {statusLabel(submission.status)}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-slate-500">Tests passed: </span>
+                  <span className="font-semibold text-slate-900">{submission.passedTests}/{submission.totalTests}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Runtime: </span>
+                  <span className="font-semibold text-slate-900">{submission.executionTimeMs}ms</span>
+                </div>
+                {submission.failedTestNumber !== null && submission.failedTestNumber !== undefined && (
+                  <div className="col-span-2">
+                    <span className="text-slate-500">Failed test: </span>
+                    <span className="font-semibold text-slate-900">Test case {submission.failedTestNumber}</span>
+                    <span className="text-slate-500 text-xs"> (details hidden)</span>
+                  </div>
+                )}
+              </div>
+              {polling && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-blue-700">
+                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full" />
+                  Waiting for the judge…
+                </div>
+              )}
+            </section>
+          )}
+
+          {history.length > 0 && (
+            <section className="bg-white border border-slate-200 rounded-xl p-5">
+              <h3 className="font-semibold text-slate-900 mb-3">Recent submissions</h3>
+              <ul className="divide-y divide-slate-100 text-sm">
+                {history.map((s) => (
+                  <li key={s.id} className="py-2 flex items-center justify-between gap-3">
+                    <span className="font-mono text-xs text-slate-500">{s.id.slice(0, 8)}</span>
+                    <span className="text-slate-600">{s.language}</span>
+                    <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${statusStyle(s.status)}`}>
+                      {statusLabel(s.status)}
+                    </span>
+                    <span className="text-slate-600">{s.passedTests}/{s.totalTests}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </div>
       </div>
