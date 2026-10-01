@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
-// Light-only coding-platform theme: a single coherent palette.
-// (Dark-mode auto-inversion removed — it made hardcoded white cards and
-// gray panels unreadable. Revisit only with a full dark token set.)
+/* Light-only coding-platform theme: a single coherent palette.
+(Dark-mode auto-inversion removed — it made hardcoded white cards and
+gray panels unreadable. Revisit only with a full dark token set.) */
 :root {
   --background: #f1f5f9;
   --foreground: #0f172a;
