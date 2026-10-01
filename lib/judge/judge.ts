@@ -168,7 +168,8 @@ const COMPILE_ERROR_PATTERNS = [
   /g\+\+|gcc|clang/i,
   /\.cpp:\d+/,
   /\.java:\d+/,
-  /error:\s/i,
+  // NOTE: no generic /error:/ pattern — it misfires on runtime errors such
+  // as "ReferenceError:" / "TypeError:". A miss falls back to RUNTIME_ERROR.
 ];
 
 export function looksLikeCompileError(stderr: string | null): boolean {
