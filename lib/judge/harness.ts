@@ -264,7 +264,24 @@ function generateJava(code: string, problemSlug: string): string {
 // JavaScript (Node.js)
 // ---------------------------------------------------------------------------
 
-function javascriptMainFor(problemSlug: string, functionName: string): string {
+function javascriptAdapterFor(functionName: string): string {
+  // Accept both `class Solution { fn(...) }` and LeetCode-style
+  // `var fn = function(...)` / `function fn(...)` / `const fn = (...) => ...`.
+  // `typeof` is safe even when the binding was never declared.
+  return [
+    "let __solve = null;",
+    "try {",
+    "    if (typeof Solution !== 'undefined' && Solution) {",
+    `        try { const __inst = new Solution(); if (__inst && typeof __inst['${functionName}'] === 'function') __solve = __inst['${functionName}'].bind(__inst); } catch (_) {}`,
+    `        if (!__solve && typeof Solution['${functionName}'] === 'function') __solve = Solution['${functionName}'];`,
+    "    }",
+    "} catch (_) {}",
+    `try { if (!__solve && typeof ${functionName} === 'function') __solve = ${functionName}; } catch (_) {}`,
+    `if (!__solve) { console.error('Expected function "${functionName}" or class Solution.${functionName} is not defined'); process.exit(1); }`,
+  ].join("\n");
+}
+
+function javascriptMainFor(problemSlug: string, _functionName: string): string {
   switch (problemSlug) {
     case "two-sum":
       return [
@@ -274,7 +291,7 @@ function javascriptMainFor(problemSlug: string, functionName: string): string {
         "    const n = Number(data[0]);",
         "    const nums = data.slice(1, 1 + n).map(Number);",
         "    const target = Number(data[1 + n]);",
-        `    const ans = new Solution().${functionName}(nums, target);`,
+        "    const ans = __solve(nums, target);",
         "    console.log(ans.join(' '));",
         "}",
         "main();",
@@ -284,7 +301,7 @@ function javascriptMainFor(problemSlug: string, functionName: string): string {
         "function main() {",
         "    const raw = fs.readFileSync(0, 'utf8').split('\\n');",
         "    const s = (raw[0] ?? '').trim();",
-        `    const ans = new Solution().${functionName}(s);`,
+        "    const ans = __solve(s);",
         "    console.log(ans ? 'true' : 'false');",
         "}",
         "main();",
@@ -297,7 +314,7 @@ function javascriptMainFor(problemSlug: string, functionName: string): string {
         "    const n = Number(data[0]);",
         "    const nums = data.slice(1, 1 + n).map(Number);",
         "    const target = Number(data[1 + n]);",
-        `    const ans = new Solution().${functionName}(nums, target);`,
+        "    const ans = __solve(nums, target);",
         "    console.log(ans);",
         "}",
         "main();",
@@ -309,7 +326,7 @@ function javascriptMainFor(problemSlug: string, functionName: string): string {
 
 function generateJavaScript(code: string, problemSlug: string): string {
   const functionName = functionNameFor(problemSlug);
-  return ["const fs = require('fs');", "", code, "", javascriptMainFor(problemSlug, functionName), ""].join("\n");
+  return ["const fs = require('fs');", "", code, "", javascriptAdapterFor(functionName), "", javascriptMainFor(problemSlug, functionName), ""].join("\n");
 }
 
 // ---------------------------------------------------------------------------
