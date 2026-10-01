@@ -5,6 +5,39 @@ export const dynamic = "force-dynamic";
 
 const SUPPORTED_LANGUAGES = ["cpp", "python", "java", "javascript"] as const;
 
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const problemId = searchParams.get("problemId");
+
+  if (!problemId) {
+    return Response.json(
+      { error: "problemId query parameter is required" },
+      { status: 400 },
+    );
+  }
+
+  const db = getDb();
+  const submissions = await db.orm.public.Submission.where((s) =>
+    s.problemId.eq(problemId),
+  )
+    .select(
+      "id",
+      "problemId",
+      "language",
+      "status",
+      "passedTests",
+      "totalTests",
+      "executionTimeMs",
+      "failedTestNumber",
+      "createdAt",
+      "updatedAt",
+    )
+    .orderBy((s) => s.createdAt.desc())
+    .all();
+
+  return Response.json(submissions);
+}
+
 export async function POST(request: Request) {
   let body: unknown;
   try {
@@ -61,13 +94,9 @@ export async function POST(request: Request) {
     status: "QUEUED",
   });
 
-  // Hand off to the background judge worker. Never run the judge here:
-  // this endpoint must return immediately.
   try {
     await enqueueSubmission(submission.id);
   } catch {
-    // Compensating delete: a QUEUED row without a queued job must not
-    // survive. No transaction spans PostgreSQL and Redis.
     try {
       await db.orm.public.Submission.where((s) =>
         s.id.eq(submission.id),

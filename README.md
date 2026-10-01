@@ -1,36 +1,125 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LeetCode Platform
 
-## Getting Started
+A LeetCode-style coding platform powered by BlackBox for sandboxed code execution.
 
-First, run the development server:
+## Tech Stack
+
+- **Frontend**: Next.js 16, React 19, Tailwind CSS 4
+- **Backend**: Next.js Route Handlers
+- **Database**: Neon PostgreSQL (via Prisma ORM)
+- **Queue**: Redis + BullMQ
+- **Execution Engine**: BlackBox (external)
+
+## Prerequisites
+
+- [Bun](https://bun.sh/) 1.3+
+- PostgreSQL (local or Neon)
+- Redis (local or Upstash)
+- BlackBox running on port 3001
+
+## Setup
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   bun install
+   ```
+3. Copy `.env.example` to `.env` and fill in your values:
+   ```bash
+   cp .env.example .env
+   ```
+4. Seed the database:
+   ```bash
+   bun run db:seed
+   ```
+5. Start the development server:
+   ```bash
+   bun run dev
+   ```
+6. Start the judge worker (in a separate terminal):
+   ```bash
+   bun run worker
+   ```
+
+## Running BlackBox Locally
+
+BlackBox is a separate project located at `./TheBlackBox`. See its README for setup instructions.
+
+To run BlackBox alongside this app:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# In TheBlackBox directory
+PORT=3001 bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Set `BLACKBOX_URL=http://localhost:3001` in your `.env` file.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## API Endpoints
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Public
 
-## Learn More
+- `GET /api/problems` - List all problems
+- `GET /api/problems/:slug` - Get problem details (public test cases only)
+- `POST /api/submissions` - Create a new submission
+- `GET /api/submissions/:id` - Get submission status/result
+- `GET /api/submissions?problemId=xxx` - List submissions for a problem
+- `GET /api/health` - Health check
+- `GET /api/health/ready` - Readiness check (PostgreSQL + Redis)
 
-To learn more about Next.js, take a look at the following resources:
+### Internal (development only)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `POST /api/internal/judge/:submissionId/run` - Synchronous judge
+- `POST /api/internal/judge/:submissionId/execute` - Execute single test case
+- `POST /api/internal/harness/:submissionId` - Generate harness source
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Submission Flow
 
-## Deploy on Vercel
+1. User submits code via `POST /api/submissions`
+2. Submission is saved to PostgreSQL with status `QUEUED`
+3. Job is enqueued to Redis via BullMQ
+4. Worker picks up the job, sets status to `RUNNING`
+5. Worker generates harness source and sends to BlackBox
+6. BlackBox executes code in Docker sandbox
+7. Worker compares output with expected output
+8. Worker updates submission with final status and results
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Submission Statuses
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `QUEUED` - Waiting in queue
+- `RUNNING` - Being judged
+- `ACCEPTED` - All tests passed
+- `WRONG_ANSWER` - Output mismatch
+- `TIME_LIMIT_EXCEEDED` - Execution exceeded time limit
+- `MEMORY_LIMIT_EXCEEDED` - Execution exceeded memory limit
+- `RUNTIME_ERROR` - Runtime error in user code
+- `COMPILE_ERROR` - Compilation failed (when distinguishable)
+- `INTERNAL_ERROR` - Infrastructure failure (BlackBox unreachable, etc.)
+
+## Project Structure
+
+```
+app/
+  api/
+    problems/          # Problem routes
+    submissions/       # Submission routes
+    health/            # Health check routes
+    internal/          # Internal development routes
+  problems/            # Problem pages
+  submissions/         # Submission history page
+  page.tsx             # Home page
+lib/
+  blackbox.ts          # BlackBox HTTP client
+  judge/
+    judge.ts           # Judge logic
+    harness.ts         # Harness generation
+  prisma.ts            # Database client
+  queue.ts             # BullMQ queue
+prisma/
+  schema.prisma        # Database schema
+  seed.ts              # Seed script
+worker.ts              # BullMQ worker
+```
+
+## License
+
+MIT
