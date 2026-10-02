@@ -248,6 +248,10 @@ export default function ProblemDetailPage() {
     setRunning(true);
     setRunError(null);
     setRunResult(null);
+    // A Run must not leave a stale submission/error panel on screen (e.g. an
+    // old "Internal Error" from a failed submit) — show only this run's result.
+    setSubmission(null);
+    setSubmitError(null);
     try {
       const res = await fetch("/api/runtime", {
         method: "POST",
@@ -282,6 +286,10 @@ export default function ProblemDetailPage() {
     setSubmitting(true);
     setSubmitError(null);
     setSubmission(null);
+    // Symmetrically clear the run panel so a stale Run result never sits
+    // next to a new submission outcome.
+    setRunError(null);
+    setRunResult(null);
     try {
       const res = await fetch("/api/submissions", {
         method: "POST",

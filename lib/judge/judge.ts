@@ -192,6 +192,14 @@ function mapBlackboxStatus(
       return "MEMORY_LIMIT_EXCEEDED";
     case "OUTPUT_LIMIT_EXCEEDED":
     case "FAILED":
+      // BlackBox's shared compiled-runtime flow wraps compile-phase timeouts
+      // as FAILED but appends an explicit "TIME_LIMIT_EXCEEDED" marker to
+      // stderr (before its "compilation timed out" text). Trust that marker
+      // over the compile/runtime heuristics so the user sees a truthful
+      // timeout instead of a generic runtime error.
+      if (stderr && stderr.includes("TIME_LIMIT_EXCEEDED")) {
+        return "TIME_LIMIT_EXCEEDED";
+      }
       return looksLikeCompileError(stderr) ? "COMPILE_ERROR" : "RUNTIME_ERROR";
     default:
       return "RUNTIME_ERROR";
